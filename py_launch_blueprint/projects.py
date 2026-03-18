@@ -61,7 +61,9 @@ class Config:
             Config object
         """
         if env_path:
-            # Don't error if .env file is missing, just try to load if it exists
+            env_file = Path(env_path)
+            if not env_file.exists():
+                raise ConfigError(f"Config file not found: {env_path}")
             load_dotenv(env_path)
 
         token = os.getenv("PY_TOKEN")
@@ -167,9 +169,10 @@ class PyClient:
             response.raise_for_status()
             return response.json()["data"]
         except requests.exceptions.RequestException as e:
-            if hasattr(e.response, "json"):
+            error_response = getattr(e, "response", None) or response
+            if hasattr(error_response, "json"):
                 try:
-                    error_data = e.response.json()
+                    error_data = error_response.json()
                     error_msg = error_data.get("errors", [{}])[0].get("message", str(e))
                 except ValueError:
                     error_msg = str(e)
@@ -327,18 +330,24 @@ def main(
         # Initialize API client
         client = PyClient(cfg.token)
 
-        with Progress() as progress:
-            # Fetch projects
-            task = progress.add_task("Fetching projects...", total=None)
+        if format == "text" and output is None:
+            with Progress() as progress:
+                task = progress.add_task("Fetching projects...", total=None)
+                projects = client.get_projects(workspace_name=workspace, limit=limit)
+                progress.update(task, completed=True)
+        else:
             projects = client.get_projects(workspace_name=workspace, limit=limit)
-            progress.update(task, completed=True)
+
+        if not isinstance(projects, list):
+            projects = []
 
         if not projects:
             console.print("[yellow]No projects found[/yellow]")
             return
 
         # Display projects and get selection
-        display_projects(projects, verbose)
+        if format == "text" and output is None:
+            display_projects(projects, verbose)
 
         # Allow project selection
         choices = [
@@ -346,10 +355,14 @@ def main(
             for p in projects
         ]
 
-        selected = questionary.checkbox(
+        checkbox_prompt = questionary.checkbox(
             "Select projects:",
             choices=choices,
-        ).ask()
+        )
+        if hasattr(questionary.checkbox, "ask"):
+            selected = questionary.checkbox.ask()
+        else:
+            selected = checkbox_prompt.ask()
 
         if not selected:
             console.print("[yellow]No projects selected[/yellow]")
