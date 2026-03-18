@@ -67,6 +67,9 @@ py-utils/
 # Example CLI Tool Usage
 [Example CLI: py-projects](EXAMPLECLI.md)
 
+# Research Blueprint Example
+[PFNs Blueprint for Bayesian Marketing Analysis](docs/pfns_bayesian_marketing_blueprint.md)
+
 ## Development
 
 ### Setup Development Environment
